@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🇰🇷 樂學韓文：基礎遊戲挑戰 🇰🇷</title>
-   
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.min.js"></script>
-   
+    
     <script src="game.js"></script>
 
     <style>
@@ -17,75 +16,28 @@
             align-items: center;
             flex-direction: column;
             margin: 0;
-            font-family: '微軟正黑體', 'Arial', sans-serif; /* 使用更美觀的中文字體 */
-            background-color: #fce4ec; /* 柔和的粉色背景 */
+            font-family: '微軟正黑體', 'Arial', sans-serif;
+            background-color: #fce4ec;
         }
-       
-        /* 網站主標題樣式 */
+        
         h1 {
-            color: #d81b60; /* 深粉色 */
+            color: #d81b60;
             margin-top: 30px;
             margin-bottom: 10px;
             font-size: 2.5em;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         }
-       
-        /* 畫布容器樣式 */
-        #p5-canvas-container {
-            border: 5px solid #ff80ab; /* 邊框顏色 */
+        
+        /* 確保畫布顯示為區塊，並在 body 中居中 */
+        canvas {
+            display: block;
+            border: 5px solid #ff80ab;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-            margin-top: 20px;
-            margin-bottom: 20px;
-            background-color: white; /* 畫布容器背景 */
             border-radius: 10px;
-            overflow: hidden; /* 確保畫布在內部 */
-        }
-       
-        /* 主選單和返回按鈕樣式 */
-        .menu-button {
-            padding: 15px 30px;
-            font-size: 20px;
-            margin: 10px;
-            cursor: pointer;
-            background-color: #880e4f; /* 深紅紫色 */
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: background-color 0.3s, transform 0.1s;
-        }
-        .menu-button:hover {
-            background-color: #c2185b;
-            transform: translateY(-2px);
-        }
-
-        /* 遊戲二 (射擊機) 的按鈕樣式 */
-        .shooter-button {
-            padding: 15px 20px;
-            font-size: 20px;
-            font-weight: bold;
-            background-color: #4a148c; /* 深紫色 */
-            color: white;
-            border: 3px solid #ffc107; /* 金色邊框 */
-            border-radius: 10px;
-            cursor: pointer;
-            transition: background-color 0.1s;
-            position: absolute; /* 讓 p5.js 可以精確定位 */
-        }
-        .shooter-button:hover {
-            background-color: #7b1fa2;
         }
     </style>
 </head>
 <body>
     <h1>🇰🇷 樂學韓文：基礎遊戲挑戰 🇰🇷</h1>
-    <p id="description">歡迎來到韓文小遊戲挑戰，請選擇一個遊戲開始學習吧！</p>
-   
-    <div id="main-menu-controls">
-        <button class="menu-button" onclick="startGame(1)">✨ 遊戲一：單字配對挑戰 ✨</button>
-        <button class="menu-button" onclick="startGame(2)">🚀 遊戲二：韓文射擊機 🚀</button>
-    </div>
-   
-    <div id="p5-canvas-container"></div>
-   
     </body>
 </html>
