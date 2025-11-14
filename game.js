@@ -3,23 +3,29 @@ let gameTable;       // 儲存 loadTable() 讀取的 CSV 資料
 let quizData = [];   // 整理後的數據
 let gameState = 'menu'; // 當前狀態: 'menu', 'game1', 'game2', 'result'
 let score = 0;       // 分數
+let game1Index = 0;  // 遊戲 1 當前題目索引
 
 // 特效與系統變數
 let cursorTrail = [];
 const TRAIL_LENGTH = 15;
 let particleSystem;
+let dataLoaded = false;
 
 // 遊戲 2 相關變數
 let fallingLetters = [];
-let targetVowel = ''; // 正在掉落字母的正確元音 (例如: 'ㅗ')
 let buttonData; // 儲存按鈕位置資訊
-let inputKey = null; // 儲存玩家輸入的元音
+let inputKey = null;
 
 // === 1. 檔案載入與初始化 ===
 
 function preload() {
     // 必須使用 Live Server 或其他本地伺服器才能載入 CSV
-    gameTable = loadTable('quiz_data.csv', 'csv', 'header');
+    gameTable = loadTable('quiz_data.csv', 'csv', 'header', 
+        // 成功載入的回調
+        () => { dataLoaded = true; }, 
+        // 失敗載入的回調
+        (err) => { console.error("CSV 載入失敗！請檢查路徑和伺服器:", err); dataLoaded = false; }
+    );
 }
 
 function setup() {
@@ -28,26 +34,33 @@ function setup() {
     noCursor(); // 隱藏預設滑鼠
     textAlign(CENTER, CENTER);
     
-    parseGameData(gameTable);
+    if (dataLoaded) {
+        parseGameData(gameTable);
+    }
+    
     particleSystem = new ParticleSystem();
     initializeButtons();
 
-    // 遊戲 2 測試用：在 setup 中生成第一個掉落字母
+    // 初始化遊戲 2 的第一個掉落字母
     if (quizData.length > 0) {
-        fallingLetters.push(new FallingLetter(quizData[3])); // 假設第 4 筆是 'drop' 數據
+        // 找到第一個 type 為 'drop' 的題目進行初始化
+        const dropQuestions = quizData.filter(d => d.type === 'drop');
+        if(dropQuestions.length > 0) {
+             fallingLetters.push(new FallingLetter(dropQuestions[0])); 
+        }
     }
 }
 
-// 初始化所有固定按鈕的位置，避免重疊
+// 初始化所有固定按鈕的位置 (重點修正：確保不重疊)
 function initializeButtons() {
     buttonData = {
         // 主選單按鈕
         menuBtn1: { x: width / 2, y: 250, w: 200, h: 50, text: "遊戲 1: 單詞配對" },
         menuBtn2: { x: width / 2, y: 350, w: 200, h: 50, text: "遊戲 2: 韓文掉落" },
         
-        // 遊戲控制按鈕 (位置修正：避免重疊)
-        restart: { x: 700, y: 30, w: 100, h: 30, text: "重新開始" },
-        backToMenu: { x: 580, y: 30, w: 100, h: 30, text: "返回選單" }, // 與重新開始按鈕隔開
+        // 遊戲控制按鈕 (重疊修正: 間隔拉大)
+        restart: { x: 650, y: 30, w: 120, h: 30, text: "重新開始" }, // 右側
+        backToMenu: { x: 500, y: 30, w: 120, h: 30, text: "返回選單" }, // 左側
         
         // 遊戲 2 輸入按鈕 (a, eo, o, u, i)
         vowelInputs: [
@@ -60,7 +73,6 @@ function initializeButtons() {
     };
 }
 
-// 解析 CSV 資料
 function parseGameData(table) {
     let rows = table.getRows();
     for (let row of rows) {
@@ -68,8 +80,7 @@ function parseGameData(table) {
             type: row.getString('type'),
             korean: row.getString('korean_word'),
             imgPath: row.getString('image_path'),
-            correctVowel: row.getString('correct_vowel') // 遊戲 2 用
-            // 在實際專案中，這裡您可能需要 load 圖像
+            correctVowel: row.getString('correct_vowel') 
         });
     }
 }
@@ -97,31 +108,31 @@ function draw() {
     drawCursorTrail();
 }
 
-// === 3. 滑鼠/鍵盤事件處理 ===
+// === 3. 滑鼠事件處理 ===
 
 function mousePressed() {
     if (gameState === 'menu') {
-        // 主選單點擊
         if (checkClick(buttonData.menuBtn1)) {
             gameState = 'game1';
-            // 可以在此處初始化 Game 1 狀態
+            game1Index = 0; // 重設遊戲 1
         } else if (checkClick(buttonData.menuBtn2)) {
             gameState = 'game2';
-            // 可以在此處初始化 Game 2 狀態
+            resetCurrentGame(); // 重設遊戲 2
         }
     } else if (gameState === 'game1' || gameState === 'game2') {
-        // 檢查控制按鈕
+        // 檢查控制按鈕 (現在不會重疊)
         if (checkClick(buttonData.restart)) {
             resetCurrentGame();
         } else if (checkClick(buttonData.backToMenu)) {
             gameState = 'menu';
-            // 清理當前遊戲狀態
+            // 清理狀態
+            score = 0;
+            fallingLetters = [];
         }
 
         if (gameState === 'game2') {
             // 遊戲 2 元音輸入按鈕
             for (let btn of buttonData.vowelInputs) {
-                // 檢查是否點擊了元音按鈕
                 if (checkClick(btn, {x: btn.x, y: btn.y, w: btn.w, h: btn.h})) {
                     inputKey = btn.char;
                     handleVowelInput(inputKey);
@@ -129,34 +140,36 @@ function mousePressed() {
                 }
             }
         }
+        
+        // 遊戲 1 選擇選項的邏輯可以放在這裡...
     }
-    // 其他遊戲點擊邏輯...
 }
 
 function handleVowelInput(vowel) {
-    // 檢查是否有掉落的字母
     if (fallingLetters.length > 0) {
-        let currentLetter = fallingLetters[0]; // 假設只處理最上面的
+        let currentLetter = fallingLetters[0]; 
         
         if (currentLetter.data.correctVowel === vowel) {
             score++;
             particleSystem.createParticles('praise', currentLetter.pos.x, currentLetter.pos.y, 30);
-            fallingLetters.splice(0, 1); // 移除正確的字母
-            
-            // 生成下一個字母
-            let nextIndex = floor(random(quizData.length));
-            if(quizData[nextIndex].type === 'drop') {
-                fallingLetters.push(new FallingLetter(quizData[nextIndex]));
-            }
+            fallingLetters.splice(0, 1); 
+            spawnNextFallingLetter();
         } else {
             particleSystem.createParticles('encourage', width / 2, height - 50, 15);
-            // 可以在這裡扣分或給予懲罰
         }
     }
 }
 
+function spawnNextFallingLetter() {
+    const dropQuestions = quizData.filter(d => d.type === 'drop');
+    if(dropQuestions.length > 0) {
+        let nextIndex = floor(random(dropQuestions.length));
+        fallingLetters.push(new FallingLetter(dropQuestions[nextIndex]));
+    }
+}
 
-// 輔助函式：檢查點擊是否在按鈕內 (支援按鈕物件或座標物件)
+
+// 輔助函式：檢查點擊是否在按鈕內
 function checkClick(btn, rect=btn) {
     if (mouseX > rect.x - rect.w / 2 && mouseX < rect.x + rect.w / 2 &&
         mouseY > rect.y - rect.h / 2 && mouseY < rect.y + rect.h / 2) {
@@ -167,7 +180,6 @@ function checkClick(btn, rect=btn) {
 
 // === 4. 繪圖與遊戲邏輯函式 ===
 
-// 繪製主選單
 function drawMenu() {
     textSize(48);
     fill(50, 100, 200);
@@ -175,6 +187,12 @@ function drawMenu() {
 
     drawButton(buttonData.menuBtn1);
     drawButton(buttonData.menuBtn2);
+
+    if (!dataLoaded) {
+        textSize(20);
+        fill(255, 50, 50);
+        text("⚠️ 警告：CSV 文件載入失敗！請使用 Live Server 或檢查路徑。", width / 2, height - 50);
+    }
 }
 
 // 遊戲 1: 單詞配對 (修正：確保圖像和文字顯示邏輯)
@@ -183,31 +201,41 @@ function drawGame1() {
     fill(50);
     text("遊戲 1: 圖像與單詞配對", width / 2, 80);
 
-    // 繪製控制按鈕 (修正重疊問題)
+    // 繪製控制按鈕 (重疊修正完成)
     drawControlButtons();
     
-    // --- 修正點: 確保圖像顯示 ---
-    let currentItem = quizData.find(d => d.type === 'match'); // 找第一個配對題
+    // --- 修正點: 確保圖像和韓文單詞顯示 ---
+    const matchQuestions = quizData.filter(d => d.type === 'match');
     
-    if (currentItem && currentItem.imgPath) {
-        // ⚠️ 注意: 這裡需要您先在 preload 中載入圖像，並將結果儲存在變數中
-        // 為了簡化，這裡僅繪製一個佔位符。
+    if (matchQuestions.length > 0 && game1Index < matchQuestions.length) {
+        let currentItem = matchQuestions[game1Index];
+        
+        // 繪製圖像/圖像佔位符 (圖案)
         fill(200, 200, 255);
-        rect(width / 2 - 100, 200, 200, 200);
+        rectMode(CENTER);
+        rect(width / 2, 250, 250, 250); // 圖像/圖案區域
         
         fill(50);
         textSize(18);
-        text(``, width / 2, 300); // 圖像佔位符
+        text(`[圖案: ${currentItem.imgPath}]`, width / 2, 250); // 圖像佔位符
         
-        // --- 修正點: 確保韓文單詞顯示 ---
+        // 繪製韓文單詞
         textSize(36);
         fill(255, 100, 100);
         text(currentItem.korean, width / 2, 450);
-    } else {
+        
+        // TODO: 繪製選項按鈕邏輯...
+        
+    } else if (!dataLoaded) {
          textSize(24);
          fill(255, 50, 50);
-         text("數據或圖像路徑未找到，請檢查 quiz_data.csv", width / 2, height / 2);
+         text("CSV 未載入。請檢查 Live Server。", width / 2, height / 2);
+    } else {
+         textSize(24);
+         fill(50, 200, 50);
+         text("遊戲 1 結束或數據不足。", width / 2, height / 2);
     }
+    rectMode(CORNER);
 }
 
 // 遊戲 2: 韓文掉落 (修正：增加元音按鈕)
@@ -217,7 +245,7 @@ function drawGame2() {
     text("遊戲 2: 韓文元音輸入", width / 2, 80);
     text(`分數: ${score}`, 100, 30);
     
-    // 繪製控制按鈕 (修正重疊問題)
+    // 繪製控制按鈕 (重疊修正完成)
     drawControlButtons();
 
     // 運行掉落邏輯
@@ -230,13 +258,8 @@ function drawGame2() {
     for (let i = fallingLetters.length - 1; i >= 0; i--) {
         if (fallingLetters[i].pos.y > height) {
             fallingLetters.splice(i, 1);
-            // 掉落懲罰: 產生鼓勵粒子並重新生成
             particleSystem.createParticles('encourage', width / 2, 0, 10);
-            
-            let nextIndex = floor(random(quizData.length));
-            if(quizData[nextIndex].type === 'drop') {
-                fallingLetters.push(new FallingLetter(quizData[nextIndex]));
-            }
+            spawnNextFallingLetter();
         }
     }
 
@@ -244,79 +267,74 @@ function drawGame2() {
     drawVowelButtons();
 }
 
-// 繪製結果畫面
 function drawResultAnimation() {
-    // 略... 這裡可以放您的結果動畫邏輯
+    textSize(40);
+    fill(50);
+    text(`測驗結束！最終分數: ${score}`, width / 2, height / 2);
+    drawButton({ x: width / 2, y: height * 0.7, w: 150, h: 50, text: "返回選單" });
+    if (checkClick({ x: width / 2, y: height * 0.7, w: 150, h: 50, text: "返回選單" })) {
+         gameState = 'menu';
+    }
 }
 
 // 繪製通用按鈕
 function drawButton(btn) {
     let isHover = checkClick(btn);
     
-    // 繪製矩形
     rectMode(CENTER);
     fill(isHover ? 100 : 150, 150, 255);
     rect(btn.x, btn.y, btn.w, btn.h, 10);
     
-    // 繪製文字
     fill(255);
     textSize(20);
     text(btn.text, btn.x, btn.y);
     rectMode(CORNER);
 }
 
-// 繪製遊戲中的控制按鈕
+// 繪製遊戲中的控制按鈕 (重新開始和返回選單)
 function drawControlButtons() {
     drawButton(buttonData.restart);
     drawButton(buttonData.backToMenu);
 }
 
-// 繪製遊戲 2 的元音輸入按鈕
+// 繪製遊戲 2 的元音輸入按鈕 (a, eo, o, u, i)
 function drawVowelButtons() {
     for (let btn of buttonData.vowelInputs) {
         let isHover = checkClick(btn, {x: btn.x, y: btn.y, w: btn.w, h: btn.h});
         
-        // 繪製矩形
         rectMode(CORNER);
         fill(isHover ? 255 : 200, 220, 100);
         rect(btn.x, btn.y, btn.w, btn.h, 5);
         
-        // 繪製文字 (韓文元音)
         fill(50);
         textSize(24);
-        text(btn.char, btn.x + btn.w / 2, btn.y + btn.h / 2);
+        text(btn.char, btn.x + btn.w / 2, btn.y + btn.h / 2 - 5); // 韓文元音
         
-        // 繪製標籤 (a, eo, o, u, i)
         textSize(14);
         fill(100);
-        text(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 15);
+        text(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 15); // 英文標籤
     }
 }
 
-// 重設當前遊戲
 function resetCurrentGame() {
     score = 0;
-    if (gameState === 'game2') {
+    if (gameState === 'game1') {
+        game1Index = 0;
+    } else if (gameState === 'game2') {
         fallingLetters = [];
-        // 重新初始化遊戲 2
-        let nextIndex = floor(random(quizData.length));
-        if(quizData[nextIndex].type === 'drop') {
-            fallingLetters.push(new FallingLetter(quizData[nextIndex]));
-        }
+        spawnNextFallingLetter();
     }
-    // TODO: 增加 game1 的重設邏輯
 }
 
+// === 5. 特效與物件類別 ===
 
-// === 5. 特效與物件類別 (保留原測驗系統的優秀部分) ===
-
-// 掉落字母類別 (為遊戲 2 設計)
+// 掉落字母類別
 class FallingLetter {
     constructor(data) {
         this.data = data;
         this.pos = createVector(random(100, width - 100), -50);
         this.vel = createVector(0, random(1, 3));
-        this.acc = createVector(0, 0.05); // 加速度讓它越來越快
+        this.acc = createVector(0, 0.05);
         this.color = color(random(50, 150), 100, 200);
     }
 
@@ -332,16 +350,7 @@ class FallingLetter {
     }
 }
 
-// 粒子系統 (Particle System) 和 游標軌跡 (Cursor Trail) 
-// 請參考我前一個回答中的 drawCursorTrail, Particle 和 ParticleSystem 類別，
-// 將它們貼到 sketch.js 文件的最下方。
-
-// [這裡應該貼上 Particle 和 ParticleSystem 類別]
-
-// [這裡應該貼上 drawCursorTrail 函式]
-
-/* --- 複製並貼上以下兩個類別和一個函式 --- */
-
+// 粒子系統類別
 class Particle {
     constructor(x, y, type) {
         this.pos = createVector(x, y);
@@ -411,6 +420,7 @@ class ParticleSystem {
     }
 }
 
+// 游標特效
 function drawCursorTrail() {
     cursorTrail.push({ x: mouseX, y: mouseY, life: 255 });
 
@@ -429,7 +439,6 @@ function drawCursorTrail() {
         translate(p.x, p.y);
         rotate(frameCount * 0.05);
         
-        // 簡單的十字星形狀
         rect(0, -size/2, 1, size);
         rect(-size/2, 0, size, 1);
         
