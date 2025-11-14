@@ -1,9 +1,9 @@
 // 全域變數
-let gameTable;       // 儲存 loadTable() 讀取的 CSV 資料
-let quizData = [];   // 整理後的數據
-let gameState = 'menu'; // 當前狀態: 'menu', 'game1', 'game2', 'result'
-let score = 0;       // 分數
-let game1Index = 0;  // 遊戲 1 當前題目索引
+let gameTable;       
+let quizData = [];   
+let gameState = 'menu'; 
+let score = 0;       
+let game1Index = 0;  
 
 // 特效與系統變數
 let cursorTrail = [];
@@ -19,12 +19,10 @@ let inputKey = null;
 // === 1. 檔案載入與初始化 ===
 
 function preload() {
-    // 必須使用 Live Server 或其他本地伺服器才能載入 CSV
+    // 載入 CSV 檔案，並檢查載入狀態
     gameTable = loadTable('quiz_data.csv', 'csv', 'header', 
-        // 成功載入的回調
         () => { dataLoaded = true; }, 
-        // 失敗載入的回調
-        (err) => { console.error("CSV 載入失敗！請檢查路徑和伺服器:", err); dataLoaded = false; }
+        (err) => { console.error("CSV 載入失敗！請確認檔案路徑和伺服器運行:", err); dataLoaded = false; }
     );
 }
 
@@ -43,7 +41,6 @@ function setup() {
 
     // 初始化遊戲 2 的第一個掉落字母
     if (quizData.length > 0) {
-        // 找到第一個 type 為 'drop' 的題目進行初始化
         const dropQuestions = quizData.filter(d => d.type === 'drop');
         if(dropQuestions.length > 0) {
              fallingLetters.push(new FallingLetter(dropQuestions[0])); 
@@ -51,18 +48,19 @@ function setup() {
     }
 }
 
-// 初始化所有固定按鈕的位置 (重點修正：確保不重疊)
+// 初始化所有固定按鈕的位置 (修正重疊問題)
 function initializeButtons() {
     buttonData = {
-        // 主選單按鈕
-        menuBtn1: { x: width / 2, y: 250, w: 200, h: 50, text: "遊戲 1: 單詞配對" },
-        menuBtn2: { x: width / 2, y: 350, w: 200, h: 50, text: "遊戲 2: 韓文掉落" },
+        // 主選單按鈕 (在畫布中央)
+        menuBtn1: { x: width / 2, y: 250, w: 250, h: 60, text: "遊戲 1: 單字配對" },
+        menuBtn2: { x: width / 2, y: 350, w: 250, h: 60, text: "遊戲 2: 韓文射擊機" },
         
-        // 遊戲控制按鈕 (重疊修正: 間隔拉大)
-        restart: { x: 650, y: 30, w: 120, h: 30, text: "重新開始" }, // 右側
-        backToMenu: { x: 500, y: 30, w: 120, h: 30, text: "返回選單" }, // 左側
+        // 遊戲控制按鈕 (重疊修正: 間隔拉大，並將 x, y 定位設為中心點)
+        restart: { x: 700, y: 30, w: 120, h: 30, text: "重新開始" }, // 右上角
+        backToMenu: { x: 550, y: 30, w: 120, h: 30, text: "返回選單" }, // 靠左一點
         
         // 遊戲 2 輸入按鈕 (a, eo, o, u, i)
+        // 這裡的 x, y 是左上角座標，因為 drawVowelButtons 中使用 rectMode(CORNER)
         vowelInputs: [
             { char: 'ㅏ', label: 'a', x: 200, y: 520, w: 60, h: 40 },
             { char: 'ㅓ', label: 'eo', x: 270, y: 520, w: 60, h: 40 },
@@ -90,21 +88,17 @@ function parseGameData(table) {
 function draw() {
     background(240);
     
-    // 繪製主遊戲畫面
     if (gameState === 'menu') {
         drawMenu();
     } else if (gameState === 'game1') {
-        drawGame1(); // 單詞配對遊戲
+        drawGame1(); 
     } else if (gameState === 'game2') {
-        drawGame2(); // 韓文掉落遊戲
+        drawGame2(); 
     } else if (gameState === 'result') {
         drawResultAnimation();
     }
 
-    // 運行粒子系統
     particleSystem.run();
-    
-    // 繪製自定義游標特效
     drawCursorTrail();
 }
 
@@ -112,20 +106,20 @@ function draw() {
 
 function mousePressed() {
     if (gameState === 'menu') {
+        // 點擊主選單按鈕
         if (checkClick(buttonData.menuBtn1)) {
             gameState = 'game1';
-            game1Index = 0; // 重設遊戲 1
+            game1Index = 0;
         } else if (checkClick(buttonData.menuBtn2)) {
             gameState = 'game2';
-            resetCurrentGame(); // 重設遊戲 2
+            resetCurrentGame();
         }
     } else if (gameState === 'game1' || gameState === 'game2') {
-        // 檢查控制按鈕 (現在不會重疊)
+        // 檢查控制按鈕
         if (checkClick(buttonData.restart)) {
             resetCurrentGame();
         } else if (checkClick(buttonData.backToMenu)) {
             gameState = 'menu';
-            // 清理狀態
             score = 0;
             fallingLetters = [];
         }
@@ -133,15 +127,13 @@ function mousePressed() {
         if (gameState === 'game2') {
             // 遊戲 2 元音輸入按鈕
             for (let btn of buttonData.vowelInputs) {
-                if (checkClick(btn, {x: btn.x, y: btn.y, w: btn.w, h: btn.h})) {
-                    inputKey = btn.char;
-                    handleVowelInput(inputKey);
+                // checkClick 參數調整以適應 rectMode(CORNER) 的按鈕
+                if (checkClick(btn, {x: btn.x + btn.w/2, y: btn.y + btn.h/2, w: btn.w, h: btn.h})) {
+                    handleVowelInput(btn.char);
                     return; 
                 }
             }
         }
-        
-        // 遊戲 1 選擇選項的邏輯可以放在這裡...
     }
 }
 
@@ -169,8 +161,10 @@ function spawnNextFallingLetter() {
 }
 
 
-// 輔助函式：檢查點擊是否在按鈕內
+// 輔助函式：檢查點擊是否在按鈕內 (使用中心點座標)
 function checkClick(btn, rect=btn) {
+    // 預設按鈕 data 的 x, y 已經是中心點 (用於 menuBtn 和 controlBtn)
+    // 對於 vowelInputs，需要傳入 rect 參數進行修正
     if (mouseX > rect.x - rect.w / 2 && mouseX < rect.x + rect.w / 2 &&
         mouseY > rect.y - rect.h / 2 && mouseY < rect.y + rect.h / 2) {
         return true;
@@ -201,16 +195,14 @@ function drawGame1() {
     fill(50);
     text("遊戲 1: 圖像與單詞配對", width / 2, 80);
 
-    // 繪製控制按鈕 (重疊修正完成)
-    drawControlButtons();
+    drawControlButtons(); // 繪製控制按鈕
     
-    // --- 修正點: 確保圖像和韓文單詞顯示 ---
     const matchQuestions = quizData.filter(d => d.type === 'match');
     
     if (matchQuestions.length > 0 && game1Index < matchQuestions.length) {
         let currentItem = matchQuestions[game1Index];
         
-        // 繪製圖像/圖像佔位符 (圖案)
+        // 繪製圖案/圖像佔位符 (圖案)
         fill(200, 200, 255);
         rectMode(CENTER);
         rect(width / 2, 250, 250, 250); // 圖像/圖案區域
@@ -219,7 +211,7 @@ function drawGame1() {
         textSize(18);
         text(`[圖案: ${currentItem.imgPath}]`, width / 2, 250); // 圖像佔位符
         
-        // 繪製韓文單詞
+        // 繪製韓文單詞 (單詞)
         textSize(36);
         fill(255, 100, 100);
         text(currentItem.korean, width / 2, 450);
@@ -245,8 +237,7 @@ function drawGame2() {
     text("遊戲 2: 韓文元音輸入", width / 2, 80);
     text(`分數: ${score}`, 100, 30);
     
-    // 繪製控制按鈕 (重疊修正完成)
-    drawControlButtons();
+    drawControlButtons(); // 繪製控制按鈕
 
     // 運行掉落邏輯
     for (let letter of fallingLetters) {
@@ -277,7 +268,7 @@ function drawResultAnimation() {
     }
 }
 
-// 繪製通用按鈕
+// 繪製通用按鈕 (使用 CENTER 模式)
 function drawButton(btn) {
     let isHover = checkClick(btn);
     
@@ -288,7 +279,7 @@ function drawButton(btn) {
     fill(255);
     textSize(20);
     text(btn.text, btn.x, btn.y);
-    rectMode(CORNER);
+    rectMode(CORNER); // 繪製完畢切回 CORNER
 }
 
 // 繪製遊戲中的控制按鈕 (重新開始和返回選單)
@@ -297,10 +288,12 @@ function drawControlButtons() {
     drawButton(buttonData.backToMenu);
 }
 
-// 繪製遊戲 2 的元音輸入按鈕 (a, eo, o, u, i)
+// 繪製遊戲 2 的元音輸入按鈕 (使用 CORNER 模式)
 function drawVowelButtons() {
     for (let btn of buttonData.vowelInputs) {
-        let isHover = checkClick(btn, {x: btn.x, y: btn.y, w: btn.w, h: btn.h});
+        // 檢查滑鼠是否在按鈕上 (需要將左上角轉換為中心點檢查)
+        let centerPoint = {x: btn.x + btn.w/2, y: btn.y + btn.h/2, w: btn.w, h: btn.h};
+        let isHover = checkClick(btn, centerPoint);
         
         rectMode(CORNER);
         fill(isHover ? 255 : 200, 220, 100);
@@ -328,7 +321,6 @@ function resetCurrentGame() {
 
 // === 5. 特效與物件類別 ===
 
-// 掉落字母類別
 class FallingLetter {
     constructor(data) {
         this.data = data;
@@ -350,7 +342,6 @@ class FallingLetter {
     }
 }
 
-// 粒子系統類別
 class Particle {
     constructor(x, y, type) {
         this.pos = createVector(x, y);
@@ -420,7 +411,6 @@ class ParticleSystem {
     }
 }
 
-// 游標特效
 function drawCursorTrail() {
     cursorTrail.push({ x: mouseX, y: mouseY, life: 255 });
 
